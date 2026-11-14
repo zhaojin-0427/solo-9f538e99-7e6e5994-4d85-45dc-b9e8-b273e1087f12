@@ -1,0 +1,23 @@
+services:
+  web:
+    build: .
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      DATA_DIR: /data
+      DATABASE: /data/water.db
+      FILES_DIR: /data/files
+      SECRET_KEY: ${SECRET_KEY:-change-me-for-production}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-67108864}
+    volumes:
+      - water-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  water-data:

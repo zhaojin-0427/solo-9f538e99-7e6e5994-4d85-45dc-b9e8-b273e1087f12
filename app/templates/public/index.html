@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}已发布数据 · 河流水质数据中心{% endblock %}
+{% block content %}
+<h1>已发布水质数据</h1>
+<p class="lede">每个日期仅展示一个对外版本；标准化明细与对应原始 CSV 属于同一版本。</p>
+
+{% if versions %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>日期</th>
+        <th>版本</th>
+        <th class="num">明细条数</th>
+        <th>原始文件</th>
+        <th>发布时间</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for version in versions %}
+      <tr>
+        <td><strong>{{ version.dataset_date }}</strong></td>
+        <td><span class="badge badge-version">v{{ version.version_no }}</span></td>
+        <td class="num">{{ version.row_count }} 条</td>
+        <td class="mono">{{ version.original_filename }}<br><span class="muted small">{{ version.size_bytes | filesize }}</span></td>
+        <td class="small muted">{{ version.published_at | datetime_local }}</td>
+        <td>
+          <div class="actions">
+            <a class="btn small" href="{{ url_for('public.version_detail', version_id=version.id) }}">查看明细</a>
+            <a class="btn small secondary" href="{{ url_for('public.download', version_id=version.id) }}">下载原文件</a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">
+  <p>暂无已发布数据。</p>
+  <p class="small">数据管理员可在 <a href="{{ url_for('admin.dashboard') }}">管理后台</a> 上传并发布。</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}管理后台 · 河流水质数据中心{% endblock %}
+{% block content %}
+<h1>数据管理后台</h1>
+<p class="lede">上传站点观测 CSV，校验通过后形成待发布候选；确认无误再发布。发布后明细与原始文件作为同一版本对外可见。</p>
+
+<div class="card">
+  <h2>上传观测文件</h2>
+  <form class="upload" method="post" action="{{ url_for('admin.upload') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label for="dataset_date">发布日期</label>
+      <input id="dataset_date" type="date" name="dataset_date" value="{{ default_date }}" required>
+      <span class="hint">文件中所有观测时刻必须属于该日期</span>
+    </div>
+    <div class="field">
+      <label for="file">观测 CSV 文件</label>
+      <input id="file" type="file" name="file" accept=".csv,.txt,text/csv" required>
+      <span class="hint">必需列：站点、指标、观测时刻、数值（UTF-8 或 GB18030）</span>
+    </div>
+    <div class="field">
+      <button class="btn" type="submit">上传并校验</button>
+    </div>
+  </form>
+</div>
+
+{% if groups %}
+  {% for group in groups %}
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>{{ group.dataset_date }}</h2>
+        <p class="small muted">
+          {% if group.published %}
+            当前已发布：v{{ group.published.version_no }}
+          {% else %}
+            该日期暂无已发布版本
+          {% endif %}
+          · 最新候选/版本：v{{ group.latest_no }}
+        </p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>版本</th>
+            <th>状态</th>
+            <th class="num">明细条数</th>
+            <th>原始文件</th>
+            <th>创建 / 发布时间</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for version in group.versions %}
+          <tr>
+            <td><span class="badge badge-version">v{{ version.version_no }}</span></td>
+            <td>
+              {% if version.status == 'published' %}
+                <span class="badge badge-published">已发布</span>
+              {% elif version.status == 'candidate' %}
+                <span class="badge badge-candidate">待发布候选</span>
+              {% else %}
+                <span class="badge badge-superseded">已被替换</span>
+              {% endif %}
+            </td>
+            <td class="num">{{ version.row_count }} 条</td>
+            <td class="mono small">{{ version.original_filename }}</td>
+            <td class="small muted">
+              创建 {{ version.created_at | datetime_local }}
+              {% if version.published_at %}<br>发布 {{ version.published_at | datetime_local }}{% endif %}
+            </td>
+            <td>
+              <div class="actions">
+                <a class="btn small secondary" href="{{ url_for('admin.candidate_detail', version_id=version.id) }}">查看</a>
+                {% if version.status == 'published' %}
+                  <a class="btn small secondary" href="{{ url_for('public.download', version_id=version.id) }}">下载</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="card empty">
+  <p>还没有任何版本。上传一个观测文件开始。</p>
+</div>
+{% endif %}
+{% endblock %}

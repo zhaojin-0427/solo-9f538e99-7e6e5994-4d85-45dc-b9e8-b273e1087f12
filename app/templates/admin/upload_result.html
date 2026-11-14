@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}校验未通过 · 管理后台{% endblock %}
+{% block content %}
+<h1>文件校验未通过</h1>
+<p class="lede">
+  文件 <span class="mono">{{ filename }}</span> 不能用于发布日期
+  <strong>{{ dataset_date }}</strong>，未形成候选，也不会对外发布。
+</p>
+
+<div class="card">
+  <h2>问题明细</h2>
+  <p class="small muted">
+    共发现 {{ result.issue_count }} 个问题{% if result.rows_seen %}，已检查 {{ result.rows_seen }} 个数据行{% endif %}。
+    请修正文件后重新上传。
+  </p>
+  <ul class="issues">
+    {% for issue in result.issues %}
+      <li>
+        {% if issue.line %}<span class="loc">第 {{ issue.line }} 行</span>{% endif %}
+        {{ issue.message }}
+      </li>
+    {% endfor %}
+  </ul>
+  {% if result.truncated %}
+    <p class="small muted">为保证页面可读，仅显示前 {{ result.issues | length }} 个问题；总计 {{ result.issue_count }} 个。</p>
+  {% endif %}
+</div>
+
+<div class="actions">
+  <a class="btn" href="{{ url_for('admin.dashboard') }}">返回重新上传</a>
+</div>
+{% endblock %}

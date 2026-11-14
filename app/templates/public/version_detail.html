@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}{{ version.dataset_date }} 水质明细 · 河流水质数据中心{% endblock %}
+{% block content %}
+<div class="card-head">
+  <div>
+    <h1>{{ version.dataset_date }} 水质观测明细</h1>
+    <p class="lede">
+      <span class="badge badge-version">v{{ version.version_no }}</span>
+      <span class="badge badge-published">已发布</span>
+      <span class="muted small">发布于 {{ version.published_at | datetime_local }}</span>
+    </p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('public.download', version_id=version.id) }}">下载该版本原始 CSV</a>
+  </div>
+</div>
+
+<div class="card">
+  <dl class="meta">
+    <dt>数据集日期</dt><dd>{{ version.dataset_date }}</dd>
+    <dt>版本</dt><dd>v{{ version.version_no }}</dd>
+    <dt>明细条数</dt><dd>{{ version.row_count }} 条</dd>
+    <dt>原始文件</dt><dd class="mono">{{ version.original_filename }} · {{ version.size_bytes | filesize }}</dd>
+    <dt>文件 SHA-256</dt><dd class="mono">{{ version.sha256 }}</dd>
+  </dl>
+  <div class="notice">
+    当前页面展示的标准化明细与上方下载的原始文件来自同一版本（v{{ version.version_no }}）。若该日期发布新版本，本页将只提供最新已发布版本。
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>标准化明细</h2>
+    <span class="muted small">共 {{ detail.total }} 条{% if detail.site or detail.metric %}（已筛选）{% endif %}</span>
+  </div>
+
+  <form class="filters" method="get" action="{{ url_for('public.version_detail', version_id=version.id) }}">
+    <div class="field">
+      <label for="site">站点</label>
+      <input id="site" type="search" name="site" value="{{ detail.site }}" placeholder="按站点筛选">
+    </div>
+    <div class="field">
+      <label for="metric">指标</label>
+      <input id="metric" type="search" name="metric" value="{{ detail.metric }}" placeholder="按指标筛选">
+    </div>
+    <button class="btn secondary" type="submit">筛选</button>
+    {% if detail.site or detail.metric %}
+      <a class="btn secondary" href="{{ url_for('public.version_detail', version_id=version.id) }}">清除</a>
+    {% endif %}
+  </form>
+
+  {% if detail.rows %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="num">#</th>
+          <th>站点</th>
+          <th>指标</th>
+          <th>观测时刻</th>
+          <th class="num">数值</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in detail.rows %}
+        <tr>
+          <td class="num muted">{{ loop.index + (detail.page - 1) * detail.per_page }}</td>
+          <td>{{ row.site }}</td>
+          <td>{{ row.metric }}</td>
+          <td class="mono">{{ row.observed_at }}</td>
+          <td class="num mono">{{ row.value_text }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty">没有符合筛选条件的明细。</div>
+  {% endif %}
+
+  {% if detail.pages > 1 %}
+  <div class="pager">
+    {% if detail.page > 1 %}
+      <a href="{{ url_for('public.version_detail', version_id=version.id, site=detail.site, metric=detail.metric, page=detail.page - 1) }}">上一页</a>
+    {% endif %}
+    <span class="muted">第 {{ detail.page }} / {{ detail.pages }} 页</span>
+    {% if detail.page < detail.pages %}
+      <a href="{{ url_for('public.version_detail', version_id=version.id, site=detail.site, metric=detail.metric, page=detail.page + 1) }}">下一页</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

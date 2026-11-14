@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}版本 v{{ version.version_no }} · 管理后台{% endblock %}
+{% block content %}
+<div class="card-head">
+  <div>
+    <h1>{{ version.dataset_date }} · v{{ version.version_no }}</h1>
+    <p class="lede">
+      {% if version.status == 'published' %}
+        <span class="badge badge-published">已发布</span> 当前对外版本
+      {% elif version.status == 'candidate' %}
+        <span class="badge badge-candidate">待发布候选</span> 尚未对外可见
+      {% else %}
+        <span class="badge badge-superseded">已被替换</span> 历史版本
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+{% if version.status == 'candidate' %}
+  {% if conflict %}
+    <div class="notice warn">
+      该日期已存在更新版本 v{{ newer.version_no }}（{{ '已发布' if newer.status == 'published' else '待发布候选' }}）。
+      发布此旧候选将被拒绝，请改为发布该日期的最新候选。
+    </div>
+    <div class="actions">
+      <button class="btn" type="button" disabled>发布此候选（已过期）</button>
+    </div>
+  {% else %}
+    <div class="notice">
+      校验已通过，文件已存入本地目录。确认明细无误后发布；发布后明细与原始文件将作为同一版本对外可见。
+    </div>
+    <form class="actions" method="post" action="{{ url_for('admin.publish', version_id=version.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn" type="submit">发布该版本</button>
+      <a class="btn secondary" href="{{ url_for('admin.candidate_detail', version_id=version.id) }}">刷新</a>
+    </form>
+  {% endif %}
+{% elif version.status == 'published' %}
+  <div class="actions">
+    <a class="btn" href="{{ url_for('public.version_detail', version_id=version.id) }}">查看对外页面</a>
+    <a class="btn secondary" href="{{ url_for('public.download', version_id=version.id) }}">下载原始文件</a>
+  </div>
+{% endif %}
+
+{% if version.status != 'published' %}
+<div class="actions" style="margin-top:0.75rem">
+  <a class="btn secondary" href="{{ url_for('admin.admin_download', version_id=version.id) }}">下载候选原始文件</a>
+</div>
+{% endif %}
+
+<div class="card" style="margin-top:1rem">
+  <dl class="meta">
+    <dt>数据集日期</dt><dd>{{ version.dataset_date }}</dd>
+    <dt>版本号</dt><dd>v{{ version.version_no }}</dd>
+    <dt>状态</dt><dd>{{ version.status }}</dd>
+    <dt>明细条数</dt><dd>{{ version.row_count }}</dd>
+    <dt>原始文件</dt><dd class="mono">{{ version.original_filename }} · {{ version.size_bytes | filesize }}</dd>
+    <dt>文件 SHA-256</dt><dd class="mono">{{ version.sha256 }}</dd>
+    <dt>创建时间</dt><dd>{{ version.created_at | datetime_local }}</dd>
+    {% if version.published_at %}<dt>发布时间</dt><dd>{{ version.published_at | datetime_local }}</dd>{% endif %}
+    {% if version.superseded_at %}<dt>替换时间</dt><dd>{{ version.superseded_at | datetime_local }}</dd>{% endif %}
+  </dl>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>标准化明细</h2>
+    <span class="muted small">共 {{ detail.total }} 条</span>
+  </div>
+  {% if detail.rows %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="num">#</th>
+          <th>站点</th>
+          <th>指标</th>
+          <th>观测时刻</th>
+          <th class="num">数值</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in detail.rows %}
+        <tr>
+          <td class="num muted">{{ loop.index + (detail.page - 1) * detail.per_page }}</td>
+          <td>{{ row.site }}</td>
+          <td>{{ row.metric }}</td>
+          <td class="mono">{{ row.observed_at }}</td>
+          <td class="num mono">{{ row.value_text }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty">没有明细。</div>
+  {% endif %}
+  {% if detail.pages > 1 %}
+  <div class="pager">
+    {% if detail.page > 1 %}
+      <a href="{{ url_for('admin.candidate_detail', version_id=version.id, page=detail.page - 1) }}">上一页</a>
+    {% endif %}
+    <span class="muted">第 {{ detail.page }} / {{ detail.pages }} 页</span>
+    {% if detail.page < detail.pages %}
+      <a href="{{ url_for('admin.candidate_detail', version_id=version.id, page=detail.page + 1) }}">下一页</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="actions">
+  <a class="btn secondary" href="{{ url_for('admin.dashboard') }}">返回后台</a>
+</div>
+{% endblock %}

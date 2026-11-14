@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}河流水质数据中心{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="{{ url_for('public.index') }}">
+        <span class="brand-mark" aria-hidden="true">≈</span>
+        <span>河流水质数据中心</span>
+      </a>
+      <nav aria-label="主导航">
+        <a href="{{ url_for('public.index') }}">已发布数据</a>
+        <a href="{{ url_for('admin.dashboard') }}">管理后台</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flashes" role="status">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="wrap footer">
+    <span>水质观测数据发布平台 · 明细与原始文件同版本对外</span>
+  </footer>
+</body>
+</html>
