@@ -118,3 +118,31 @@ def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
         except sqlite3.Error:
             pass
         raise
+
+
+@contextmanager
+def read_snapshot(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    """Run several reads against one consistent database snapshot.
+
+    SQLite in WAL mode gives a deferred read transaction a stable view: writes
+    committed by other connections after ``BEGIN`` are not visible to later
+    statements in this transaction.  Multi-day analyses therefore read every
+    version lookup and observation row from the same point-in-time state.
+    """
+    conn.execute("BEGIN")
+    try:
+        yield conn
+    except BaseException:
+        try:
+            conn.rollback()
+        except sqlite3.Error:
+            pass
+        raise
+    else:
+        try:
+            conn.commit()
+        except sqlite3.Error:
+            try:
+                conn.rollback()
+            except sqlite3.Error:
+                pass

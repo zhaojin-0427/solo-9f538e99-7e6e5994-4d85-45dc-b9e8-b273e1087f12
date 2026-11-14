@@ -5,7 +5,7 @@ from __future__ import annotations
 import hmac
 import secrets
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from flask import (
@@ -23,6 +23,15 @@ from flask import (
 
 from . import services, storage
 from .db import get_db
+from .loads import (
+    DEFAULT_INTERVAL,
+    FORM_FIELDS,
+    LoadInputError,
+    analyse,
+    format_decimal,
+    format_time,
+    parse_request,
+)
 from .validation import validate_file
 
 public_bp = Blueprint("public", __name__)
@@ -126,6 +135,76 @@ def download(version_id: int):
         download_name=version["original_filename"],
         conditional=True,
     )
+
+
+def _load_form_values(values) -> dict[str, str]:
+    return {key: str(values.get(key, "") or "") for key in FORM_FIELDS}
+
+
+def _render_load_page(
+    *,
+    form: dict[str, str],
+    sites: list[str],
+    analysis=None,
+    errors: list[str] | None = None,
+    status: int = 200,
+):
+    return (
+        render_template(
+            "public/load_analysis.html",
+            form=form,
+            sites=sites,
+            analysis=analysis,
+            errors=errors or [],
+            metric="总磷",
+            fmt_decimal=format_decimal,
+            fmt_time=format_time,
+        ),
+        status,
+    )
+
+
+@public_bp.get("/loads")
+def load_analysis():
+    conn = get_db()
+    sites = services.list_published_sites(conn)
+    # Only a submitted result carries parameters; a fresh GET starts clean.
+    form = _load_form_values({})
+    latest = conn.execute(
+        """
+        SELECT dataset_date FROM versions
+         WHERE status = 'published'
+         ORDER BY dataset_date DESC
+         LIMIT 1
+        """
+    ).fetchone()
+    if latest is not None:
+        try:
+            latest_day = date.fromisoformat(latest["dataset_date"])
+        except ValueError:
+            latest_day = None
+        if latest_day is not None:
+            form["end_date"] = latest_day.isoformat()
+            form["start_date"] = (latest_day - timedelta(days=1)).isoformat()
+    form["upstream_max_interval"] = DEFAULT_INTERVAL
+    form["downstream_max_interval"] = DEFAULT_INTERVAL
+    return _render_load_page(form=form, sites=sites)
+
+
+@public_bp.post("/loads")
+def load_analysis_submit():
+    conn = get_db()
+    sites = services.list_published_sites(conn)
+    form = _load_form_values(request.form)
+    _check_csrf()
+    try:
+        load_request = parse_request(request.form)
+    except LoadInputError as exc:
+        return _render_load_page(
+            form=form, sites=sites, errors=exc.errors, status=422
+        )
+    analysis = analyse(conn, load_request)
+    return _render_load_page(form=form, sites=sites, analysis=analysis)
 
 
 # ---------------------------------------------------------------------------

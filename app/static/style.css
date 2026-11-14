@@ -207,6 +207,44 @@ input:focus-visible, .btn:focus-visible, a:focus-visible {
 .version-row { border-top: 1px solid var(--line); padding: 0.8rem 0; }
 .version-row:first-of-type { border-top: 0; }
 
+form.load-form { display: grid; gap: 1rem; }
+.load-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.8rem 1rem 1rem;
+  margin: 0;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.load-group legend {
+  font-weight: 700;
+  font-size: 0.92rem;
+  padding: 0 0.4rem;
+  color: var(--accent-strong);
+}
+.load-form input[type="number"] {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #b9cbc5;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  width: 100%;
+}
+
+.verdict {
+  display: inline-block;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+}
+.verdict-added { background: var(--danger-soft); color: var(--danger); border-color: #f3c1bc; }
+.verdict-none { background: var(--ok-soft); color: var(--ok); border-color: #b8dfc8; }
+.verdict-unknown { background: var(--warn-soft); color: var(--warn); border-color: #efd79a; }
+
 @media (max-width: 620px) {
   .topbar-inner { align-items: flex-start; }
   h1 { font-size: 1.25rem; }

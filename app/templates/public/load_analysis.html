@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}总磷负荷核算 · 河流水质数据中心{% endblock %}
+{% block content %}
+<h1>跨午夜总磷负荷核算</h1>
+<p class="lede">
+  选择上游、下游两个断面与连续两个数据集日期，按两日当前已发布版本的总磷浓度（mg/L）与所填流量范围（m³/s）核算负荷区间。
+  两日版本在同一数据库快照中读取；任一日期缺少已发布版本时不计算。
+</p>
+
+{% if sites %}
+<div class="notice small">
+  已发布数据中出现的断面：{{ sites | join('、') }}
+</div>
+{% endif %}
+
+{% if errors %}
+<div class="notice error" role="alert">
+  <strong>参数有误，请修正后重新核算：</strong>
+  <ul class="issues">
+    {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>核算参数</h2>
+  <form class="load-form" method="post" action="{{ url_for('public.load_analysis_submit') }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <fieldset class="load-group">
+      <legend>时间窗口（连续两日）</legend>
+      <div class="field">
+        <label for="start_date">起始日期</label>
+        <input id="start_date" type="date" name="start_date" value="{{ form.start_date }}">
+        <span class="hint">窗口从该日 00:00 起算 48 小时</span>
+      </div>
+      <div class="field">
+        <label for="end_date">结束日期</label>
+        <input id="end_date" type="date" name="end_date" value="{{ form.end_date }}">
+        <span class="hint">必须是起始日期的次日</span>
+      </div>
+    </fieldset>
+
+    <fieldset class="load-group">
+      <legend>上游断面</legend>
+      <div class="field">
+        <label for="upstream_site">断面名称</label>
+        <input id="upstream_site" type="text" name="upstream_site" value="{{ form.upstream_site }}"
+               list="site-options" placeholder="选择或填写上游断面">
+      </div>
+      <div class="field">
+        <label for="upstream_flow_min">流量下限（m³/s）</label>
+        <input id="upstream_flow_min" type="text" inputmode="decimal" name="upstream_flow_min"
+               value="{{ form.upstream_flow_min }}" placeholder="例如 12.5">
+        <span class="hint">必须大于 0 且有限</span>
+      </div>
+      <div class="field">
+        <label for="upstream_flow_max">流量上限（m³/s）</label>
+        <input id="upstream_flow_max" type="text" inputmode="decimal" name="upstream_flow_max"
+               value="{{ form.upstream_flow_max }}" placeholder="例如 15.0">
+        <span class="hint">不小于下限</span>
+      </div>
+      <div class="field">
+        <label for="upstream_max_interval">最大采样间隔（小时）</label>
+        <input id="upstream_max_interval" type="number" name="upstream_max_interval"
+               min="1" max="6" step="any" value="{{ form.upstream_max_interval }}">
+        <span class="hint">1～6；相邻读数间隔超过该值则不做插值</span>
+      </div>
+    </fieldset>
+
+    <fieldset class="load-group">
+      <legend>下游断面</legend>
+      <div class="field">
+        <label for="downstream_site">断面名称</label>
+        <input id="downstream_site" type="text" name="downstream_site" value="{{ form.downstream_site }}"
+               list="site-options" placeholder="选择或填写下游断面">
+      </div>
+      <div class="field">
+        <label for="downstream_flow_min">流量下限（m³/s）</label>
+        <input id="downstream_flow_min" type="text" inputmode="decimal" name="downstream_flow_min"
+               value="{{ form.downstream_flow_min }}" placeholder="例如 14.0">
+        <span class="hint">必须大于 0 且有限</span>
+      </div>
+      <div class="field">
+        <label for="downstream_flow_max">流量上限（m³/s）</label>
+        <input id="downstream_flow_max" type="text" inputmode="decimal" name="downstream_flow_max"
+               value="{{ form.downstream_flow_max }}" placeholder="例如 17.0">
+        <span class="hint">不小于下限</span>
+      </div>
+      <div class="field">
+        <label for="downstream_max_interval">最大采样间隔（小时）</label>
+        <input id="downstream_max_interval" type="number" name="downstream_max_interval"
+               min="1" max="6" step="any" value="{{ form.downstream_max_interval }}">
+        <span class="hint">1～6；相邻读数间隔超过该值则不做插值</span>
+      </div>
+    </fieldset>
+
+    <datalist id="site-options">
+      {% for site in sites %}<option value="{{ site }}">{% endfor %}
+    </datalist>
+
+    <div class="actions">
+      <button class="btn" type="submit">核算负荷区间</button>
+    </div>
+  </form>
+</div>
+
+{% if analysis %}
+  {% if analysis.missing_days %}
+  <div class="card">
+    <div class="notice warn">
+      <strong>缺少当前已发布版本，未进行核算。</strong>
+      以下日期没有已发布的观测版本：
+      {% for day in analysis.missing_days %}<span class="badge badge-candidate">{{ day.day.isoformat() }}</span>{% endfor %}
+      两日核算需要两天的当前已发布版本齐全；为避免只用单日数据推测跨日窗口，本次不输出任何负荷结果。
+    </div>
+  </div>
+  {% else %}
+    {% set result = analysis.result %}
+
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>核算快照</h2>
+          <p class="small muted">两日版本在同一次数据库读取事务中取得，重发不会混用版本。</p>
+        </div>
+      </div>
+      <dl class="meta">
+        <dt>时间窗口</dt>
+        <dd class="mono">{{ fmt_time(result.window_start) }} — {{ fmt_time(result.window_end) }}（{{ fmt_decimal(result.window_hours, 2) }} 小时）</dd>
+        <dt>总磷指标</dt><dd>{{ metric }}（已发布值，mg/L）</dd>
+        {% for day in analysis.snapshot.days %}
+        <dt>{{ day.day.isoformat() }} 当前发布版本</dt>
+        <dd>
+          <span class="badge badge-version">v{{ day.version.version_no }}</span>
+          <span class="muted small mono">SHA-256 {{ day.version.sha256[:16] }}…</span>
+        </dd>
+        {% endfor %}
+        <dt>{{ result.upstream.spec.name }} 流量</dt>
+        <dd class="mono">{{ fmt_decimal(result.upstream.spec.flow_min) }} ～ {{ fmt_decimal(result.upstream.spec.flow_max) }} m³/s ·
+          最大间隔 {{ fmt_decimal(result.upstream.spec.max_interval_hours) }} h</dd>
+        <dt>{{ result.downstream.spec.name }} 流量</dt>
+        <dd class="mono">{{ fmt_decimal(result.downstream.spec.flow_min) }} ～ {{ fmt_decimal(result.downstream.spec.flow_max) }} m³/s ·
+          最大间隔 {{ fmt_decimal(result.downstream.spec.max_interval_hours) }} h</dd>
+      </dl>
+      <div class="notice">
+        负荷按 <span class="mono">3.6 × 浓度(mg/L) × 流量(m³/s)</span> 折算为 kg/h，再对参与时段积分。
+        流量只有上下限，因此每个站点的负荷是一个区间；不进行任何外推。
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>结论</h2>
+          <p class="small muted">下游减上游的差额区间决定结论。</p>
+        </div>
+        <span class="verdict verdict-{{ result.verdict }}">{{ result.verdict_title }}</span>
+      </div>
+      <p>{{ result.verdict_detail }}</p>
+      {% if result.diff_low is not none %}
+      <p class="mono">
+        下游 − 上游差额：{{ fmt_decimal(result.diff_low) }} ～ {{ fmt_decimal(result.diff_high) }} kg
+      </p>
+      {% endif %}
+      {% if not result.fully_covered %}
+      <div class="notice warn">
+        共同观测支撑仅覆盖 {{ fmt_decimal(result.coverage_hours, 4) }} 小时，
+        占两日窗口的 {{ fmt_decimal(result.coverage_percent, 2) }}%。
+        以下结果为<strong>参与时段</strong>的核算，不是两日总量。
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="grid grid-2">
+      {% for station in [result.upstream, result.downstream] %}
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>{{ station.spec.name }}</h2>
+            <p class="small muted">
+              本站可插值 {{ fmt_decimal(station.support_hours, 4) }} 小时 ·
+              两站共同参与 {{ fmt_decimal(result.coverage_hours, 4) }} 小时 ·
+              {{ station.readings | length }} 条总磷读数
+              {% if station.negative_count %}· <span class="badge badge-candidate">{{ station.negative_count }} 条负值不参与插值</span>{% endif %}
+            </p>
+          </div>
+        </div>
+        {% if station.load_low is not none %}
+        <dl class="meta">
+          <dt>负荷范围</dt>
+          <dd class="mono"><strong>{{ fmt_decimal(station.load_low) }} ～ {{ fmt_decimal(station.load_high) }} kg</strong>
+            <br><span class="muted small">按两站共同参与时段积分，本站单独有支撑的其余时段不计入</span></dd>
+          <dt>浓度积分</dt>
+          <dd class="mono">{{ fmt_decimal(station.integral) }} mg/L·h</dd>
+          <dt>本站可插值时段</dt>
+          <dd>
+            {% if station.support %}
+              {% for interval in station.support %}
+              <span class="mono small">{{ fmt_time(interval.start) }} — {{ fmt_time(interval.end) }}</span>{% if not loop.last %}<br>{% endif %}
+              {% endfor %}
+            {% else %}
+              <span class="muted">无满足间隔要求的相邻读数</span>
+            {% endif %}
+          </dd>
+        </dl>
+        {% else %}
+        <div class="empty">该断面没有与另一断面共同支撑的时段，未计算负荷。</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="card">
+      <h2>参与时段（两站共同有观测支撑）</h2>
+      {% if result.segments %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>时段</th>
+              <th class="num">小时</th>
+              <th class="num">{{ result.upstream.spec.name }} 负荷（kg）</th>
+              <th class="num">{{ result.downstream.spec.name }} 负荷（kg）</th>
+              <th class="num">差额（kg）</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for segment in result.segments %}
+            <tr>
+              <td class="mono small">{{ fmt_time(segment.start) }} — {{ fmt_time(segment.end) }}</td>
+              <td class="num mono">{{ fmt_decimal(segment.hours, 4) }}</td>
+              <td class="num mono">{{ fmt_decimal(segment.upstream_load_low) }} ～ {{ fmt_decimal(segment.upstream_load_high) }}</td>
+              <td class="num mono">{{ fmt_decimal(segment.downstream_load_low) }} ～ {{ fmt_decimal(segment.downstream_load_high) }}</td>
+              <td class="num mono">{{ fmt_decimal(segment.diff_low) }} ～ {{ fmt_decimal(segment.diff_high) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty">两站没有任何共同观测支撑时段，未进行积分。</div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>窗口缺口（未参与计算）</h2>
+      {% if result.gaps %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>缺口时段</th><th class="num">小时</th></tr>
+          </thead>
+          <tbody>
+            {% for gap in result.gaps %}
+            <tr>
+              <td class="mono small">{{ fmt_time(gap.start) }} — {{ fmt_time(gap.end) }}</td>
+              <td class="num mono">{{ fmt_decimal(gap.hours, 4) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">
+        缺口成因包括：相邻读数间隔超过该站最大采样间隔、读数缺失或不连续、出现负浓度读数。
+        这些时段没有外推，也没有计入负荷。
+      </p>
+      {% else %}
+      <div class="empty">两日窗口内两站全程有观测支撑。</div>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

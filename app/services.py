@@ -249,6 +249,20 @@ def list_versions(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def list_published_sites(conn: sqlite3.Connection) -> list[str]:
+    """Return site names that occur in at least one published version."""
+    rows = conn.execute(
+        """
+        SELECT DISTINCT o.site
+          FROM observations o
+          JOIN versions v ON v.id = o.version_id
+         WHERE v.status = 'published'
+         ORDER BY o.site
+        """
+    ).fetchall()
+    return [row["site"] for row in rows]
+
+
 def build_admin_groups(versions: Iterable[sqlite3.Row]) -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = {}
     for version in versions:
